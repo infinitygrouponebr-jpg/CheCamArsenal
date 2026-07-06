@@ -127,9 +127,7 @@ public final class GunShotHandler {
                             GunShotVisualPayload.AIM_PROVIDER_THE_CAM,
                             null);
                 }
-                return resolveFallbackAim(player, stats, "INVALID_CLIENT_AIM_PAYLOAD");
             }
-            return resolveFallbackAim(player, stats, "CLIENT_PAYLOAD_VANILLA_AIM");
         }
 
         ResolvedAim serverStoreAim = resolveServerStoreAim(player, stats);
@@ -137,6 +135,12 @@ public final class GunShotHandler {
             return serverStoreAim;
         }
 
+        if (payload != null && payload.hasTheCamAim()) {
+            return resolveFallbackAim(player, stats, "INVALID_CLIENT_AIM_PAYLOAD");
+        }
+        if (payload != null) {
+            return resolveFallbackAim(player, stats, "CLIENT_PAYLOAD_VANILLA_AIM");
+        }
         return resolveFallbackAim(player, stats, "SERVER_THECAM_AIM_STORE_UNAVAILABLE");
     }
 

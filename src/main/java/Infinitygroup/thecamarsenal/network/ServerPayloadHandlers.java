@@ -38,6 +38,10 @@ public final class ServerPayloadHandlers {
 
             GunDefinition definition = gunItem.getGunDefinition();
             if (definition == null || !definition.id().equals(payload.weaponId())) {
+                TheCamArsenal.LOGGER.warn(
+                        "ARSENAL_SERVER_SHOOT_PAYLOAD_REJECTED reason=WEAPON_ID_MISMATCH payloadWeapon={} actualWeapon={}",
+                        payload.weaponId(),
+                        definition == null ? "null" : definition.id());
                 return;
             }
 
