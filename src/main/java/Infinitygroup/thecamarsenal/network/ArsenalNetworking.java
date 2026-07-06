@@ -13,5 +13,6 @@ public final class ArsenalNetworking {
         registrar.playToClient(ClientPermissionPayload.TYPE, ClientPermissionPayload.STREAM_CODEC, ClientPayloadHandlers::handleClientPermission);
         registrar.playToClient(GunReloadStatePayload.TYPE, GunReloadStatePayload.STREAM_CODEC, ClientPayloadHandlers::handleGunReloadState);
         registrar.playToServer(ReloadGunPayload.TYPE, ReloadGunPayload.STREAM_CODEC, ServerPayloadHandlers::handleReloadGun);
+        registrar.playToServer(ShootGunPayload.TYPE, ShootGunPayload.STREAM_CODEC, ServerPayloadHandlers::handleShootGun);
     }
 }

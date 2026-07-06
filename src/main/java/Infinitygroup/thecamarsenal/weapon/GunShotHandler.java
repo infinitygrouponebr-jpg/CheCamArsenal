@@ -6,6 +6,7 @@ import infinitygroup.thecamarsenal.aim.ArsenalAimManager;
 import infinitygroup.thecamarsenal.aim.TheCamAimProvider;
 import infinitygroup.thecamarsenal.config.CommonConfig;
 import infinitygroup.thecamarsenal.network.GunShotVisualPayload;
+import infinitygroup.thecamarsenal.network.ShootGunPayload;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -18,11 +19,16 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 public final class GunShotHandler {
     private static final double AIM_TARGET_MIN_DISTANCE = 0.25D;
+    private static final double AIM_TARGET_MAX_EXTRA_DISTANCE = 4.0D;
 
     private GunShotHandler() {
     }
 
     public static boolean tryFire(ServerPlayer player, ItemStack stack, GunDefinition definition) {
+        return tryFire(player, stack, definition, null);
+    }
+
+    public static boolean tryFire(ServerPlayer player, ItemStack stack, GunDefinition definition, ShootGunPayload payload) {
         if (!isWeaponEnabled(definition.id())) {
             return false;
         }
@@ -40,38 +46,8 @@ public final class GunShotHandler {
         }
 
         ServerLevel level = player.serverLevel();
-        AimProvider aimProvider = ArsenalAimManager.getAimProvider(player);
-        boolean theCamLoaded = TheCamAimProvider.isTheCamLoaded();
-        boolean theCamActive = aimProvider == TheCamAimProvider.INSTANCE && aimProvider.isTheCamAimActive(player);
         GunStats stats = resolveStats(definition);
-
-        Vec3 cameraOrigin = aimProvider.getAimOrigin(player);
-        Vec3 cameraDirection = normalizeOrDefault(aimProvider.getAimDirection(player));
-        Vec3 shotOrigin = resolveShotOrigin(player, aimProvider, cameraOrigin, theCamActive);
-        Vec3 aimTarget = aimProvider.getAimTarget(player);
-        boolean hasAimTarget = theCamActive && aimProvider.hasAimTarget(player);
-        boolean aimTargetValid = isValidAimTarget(shotOrigin, aimTarget, stats);
-        Vec3 fallbackDirection = normalizeOrDefault(Vec3.directionFromRotation(player.getXRot(), player.getYRot()));
-        boolean usedTheCamAim = theCamActive && aimTargetValid;
-
-        Vec3 shotDirection;
-        String fallbackReason = null;
-        if (usedTheCamAim) {
-            shotDirection = aimTarget.subtract(shotOrigin).normalize();
-        } else {
-            if (theCamLoaded && theCamActive && !aimTargetValid) {
-                fallbackReason = "INVALID_AIM_TARGET";
-            } else if (theCamLoaded && !theCamActive) {
-                fallbackReason = "THE_CAM_INACTIVE";
-            } else if (!theCamLoaded) {
-                fallbackReason = "THE_CAM_NOT_LOADED";
-            } else {
-                fallbackReason = "VANILLA_FALLBACK";
-            }
-
-            aimTarget = shotOrigin.add(fallbackDirection.scale(stats.range()));
-            shotDirection = fallbackDirection;
-        }
+        ResolvedAim aim = resolveAim(player, stats, payload);
 
         GunAmmoHelper.ensureAmmoInitialized(stack, definition);
         int currentAmmo = GunAmmoHelper.getAmmo(stack, definition);
@@ -85,7 +61,7 @@ public final class GunShotHandler {
             player.getInventory().setChanged();
         }
 
-        HitResult hitResult = GunRaycast.raycast(level, player, shotOrigin, shotDirection, stats.range());
+        HitResult hitResult = GunRaycast.raycast(level, player, aim.shotOrigin(), aim.shotDirection(), stats.range());
         Vec3 hitPoint = hitResult.getLocation();
         byte hitType = GunShotVisualPayload.HIT_MISS;
         int hitEntityId = -1;
@@ -104,58 +80,16 @@ public final class GunShotHandler {
         }
 
         if (CommonConfig.INSTANCE.enableDebugAim.get()) {
-            String providerName = theCamLoaded ? "THE_CAM_MOUSE_FOLLOW" : "VANILLA_AIM_PROVIDER";
-            String hitDescription = switch (hitType) {
-                case GunShotVisualPayload.HIT_ENTITY -> "ENTITY";
-                case GunShotVisualPayload.HIT_BLOCK -> "BLOCK";
-                default -> "MISS";
-            };
-            String targetName = hitResult.getType() == HitResult.Type.ENTITY && hitResult instanceof net.minecraft.world.phys.EntityHitResult entityHitResult
-                    ? entityHitResult.getEntity().getType().toShortString()
-                    : hitResult.getType() == HitResult.Type.BLOCK && hitResult instanceof net.minecraft.world.phys.BlockHitResult blockHitResult
-                            ? blockHitResult.getBlockPos().toString()
-                            : "none";
-            if (usedTheCamAim) {
-                TheCamArsenal.LOGGER.info(
-                        "ARSENAL_AIM_PROVIDER_SELECTED provider={} active={} hasTarget={} origin={} direction={} target={}",
-                        providerName,
-                        theCamActive,
-                        hasAimTarget,
-                        cameraOrigin,
-                        cameraDirection,
-                        aimTarget);
-                TheCamArsenal.LOGGER.info(
-                        "ARSENAL_SHOT_USING_THECAM_MOUSE_FOLLOW shotOrigin={} aimTarget={} shotDirection={}",
-                        shotOrigin,
-                        aimTarget,
-                        shotDirection);
-            } else if (theCamLoaded) {
-                TheCamArsenal.LOGGER.info(
-                        "ARSENAL_SHOT_FALLBACK reason={} provider={} cameraOrigin={} cameraDirection={} aimTarget={} shotOrigin={} shotDirection={} hitPos={} hitType={} distance={} target={} player={}",
-                        fallbackReason,
-                        providerName,
-                        cameraOrigin,
-                        cameraDirection,
-                        aimTarget,
-                        shotOrigin,
-                        shotDirection,
-                        hitPoint,
-                        hitDescription,
-                        hitPoint.distanceTo(shotOrigin),
-                        targetName,
-                        player.getGameProfile().getName());
-            }
+            logAimResolution(player, stats, aim, hitPoint, hitType);
         }
 
         GunCooldownManager.applyCooldown(player, stack.getItem(), stats.cooldownTicks());
         PacketDistributor.sendToPlayersTrackingEntityAndSelf(player,
-                new GunShotVisualPayload(player.getId(), hitEntityId,
-                        aimProvider == TheCamAimProvider.INSTANCE ? GunShotVisualPayload.AIM_PROVIDER_THE_CAM : GunShotVisualPayload.AIM_PROVIDER_VANILLA,
-                        hasAimTarget,
+                new GunShotVisualPayload(player.getId(), hitEntityId, aim.visualProvider(), aim.hasAimTarget(),
                         definition.shootSound().getId().toString(),
-                        cameraOrigin.x, cameraOrigin.y, cameraOrigin.z,
-                        shotOrigin.x, shotOrigin.y, shotOrigin.z,
-                        aimTarget.x, aimTarget.y, aimTarget.z,
+                        aim.cameraOrigin().x, aim.cameraOrigin().y, aim.cameraOrigin().z,
+                        aim.shotOrigin().x, aim.shotOrigin().y, aim.shotOrigin().z,
+                        aim.aimTarget().x, aim.aimTarget().y, aim.aimTarget().z,
                         hitPoint.x, hitPoint.y, hitPoint.z, hitType));
 
         return true;
@@ -175,17 +109,182 @@ public final class GunShotHandler {
         };
     }
 
-    private static boolean isWeaponEnabled(String weaponId) {
-        return switch (weaponId) {
-            case "scarm" -> CommonConfig.INSTANCE.enableScarm.get();
-            case "akm_47" -> CommonConfig.INSTANCE.enableAkm47.get();
-            default -> true;
-        };
+    private static ResolvedAim resolveAim(ServerPlayer player, GunStats stats, ShootGunPayload payload) {
+        if (payload != null) {
+            if (payload.hasTheCamAim()) {
+                if (validateClientPayload(player, stats, payload) == null) {
+                    Vec3 cameraOrigin = sanitizeVec(payload.aimOrigin(), player.getEyePosition(1.0F));
+                    Vec3 aimTarget = sanitizeVec(payload.aimTarget(), cameraOrigin.add(normalizeOrDefault(payload.aimDirection()).scale(stats.range())));
+                    Vec3 shotOrigin = resolveShotOrigin(player, cameraOrigin, true);
+                    Vec3 shotDirection = normalizeOrDefault(aimTarget.subtract(shotOrigin));
+                    return new ResolvedAim(
+                            AimSource.CLIENT_PAYLOAD,
+                            cameraOrigin,
+                            shotOrigin,
+                            shotDirection,
+                            aimTarget,
+                            payload.hasAimTarget(),
+                            GunShotVisualPayload.AIM_PROVIDER_THE_CAM,
+                            null);
+                }
+                return resolveFallbackAim(player, stats, "INVALID_CLIENT_AIM_PAYLOAD");
+            }
+            return resolveFallbackAim(player, stats, "CLIENT_PAYLOAD_VANILLA_AIM");
+        }
+
+        ResolvedAim serverStoreAim = resolveServerStoreAim(player, stats);
+        if (serverStoreAim != null) {
+            return serverStoreAim;
+        }
+
+        return resolveFallbackAim(player, stats, "SERVER_THECAM_AIM_STORE_UNAVAILABLE");
     }
 
-    private static Vec3 resolveShotOrigin(ServerPlayer player, AimProvider aimProvider, Vec3 cameraOrigin, boolean theCamActive) {
-        if (!theCamActive) {
-            return aimProvider.getAimOrigin(player);
+    private static ResolvedAim resolveServerStoreAim(ServerPlayer player, GunStats stats) {
+        AimProvider aimProvider = ArsenalAimManager.getAimProvider(player);
+        boolean theCamLoaded = TheCamAimProvider.isTheCamLoaded();
+        boolean theCamActive = aimProvider == TheCamAimProvider.INSTANCE && aimProvider.isTheCamAimActive(player);
+        if (!theCamLoaded || !theCamActive) {
+            return null;
+        }
+
+        Vec3 cameraOrigin = sanitizeVec(aimProvider.getAimOrigin(player), player.getEyePosition(1.0F));
+        Vec3 aimTarget = sanitizeVec(aimProvider.getAimTarget(player), cameraOrigin.add(normalizeOrDefault(aimProvider.getAimDirection(player)).scale(stats.range())));
+        Vec3 shotOrigin = resolveShotOrigin(player, cameraOrigin, true);
+        String validationReason = validateAimTarget(shotOrigin, aimTarget, stats);
+        if (validationReason != null) {
+            return null;
+        }
+
+        return new ResolvedAim(
+                AimSource.SERVER_STORE,
+                cameraOrigin,
+                shotOrigin,
+                normalizeOrDefault(aimTarget.subtract(shotOrigin)),
+                aimTarget,
+                aimProvider.hasAimTarget(player),
+                GunShotVisualPayload.AIM_PROVIDER_THE_CAM,
+                null);
+    }
+
+    private static ResolvedAim resolveFallbackAim(ServerPlayer player, GunStats stats, String reason) {
+        Vec3 cameraOrigin = player.getEyePosition(1.0F);
+        Vec3 shotOrigin = cameraOrigin;
+        Vec3 shotDirection = normalizeOrDefault(Vec3.directionFromRotation(player.getXRot(), player.getYRot()));
+        Vec3 aimTarget = shotOrigin.add(shotDirection.scale(stats.range()));
+        return new ResolvedAim(
+                AimSource.VANILLA_FALLBACK,
+                cameraOrigin,
+                shotOrigin,
+                shotDirection,
+                aimTarget,
+                false,
+                GunShotVisualPayload.AIM_PROVIDER_VANILLA,
+                reason);
+    }
+
+    private static String validateClientPayload(ServerPlayer player, GunStats stats, ShootGunPayload payload) {
+        if (!isFinite(payload.aimOrigin()) || !isFinite(payload.aimDirection()) || !isFinite(payload.aimTarget())) {
+            return "INVALID_CLIENT_AIM_PAYLOAD_NON_FINITE";
+        }
+
+        Vec3 rawDirection = payload.aimDirection();
+        if (rawDirection.lengthSqr() <= 1.0E-6D) {
+            return "INVALID_CLIENT_AIM_PAYLOAD_DIRECTION";
+        }
+        Vec3 payloadDirection = rawDirection.normalize();
+
+        Vec3 shotOrigin = resolveShotOrigin(player, payload.aimOrigin(), true);
+        String targetValidation = validateAimTarget(shotOrigin, payload.aimTarget(), stats);
+        if (targetValidation != null) {
+            return "INVALID_CLIENT_AIM_PAYLOAD_" + targetValidation;
+        }
+
+        Vec3 expectedDirection = normalizeOrDefault(Vec3.directionFromRotation(player.getXRot(), player.getYRot()));
+        double maxAngleDegrees = CommonConfig.INSTANCE.clientAimPayloadMaxAngleDegrees.get();
+        if (maxAngleDegrees >= 0.0D && maxAngleDegrees < 180.0D) {
+            double dot = clamp(payloadDirection.dot(expectedDirection), -1.0D, 1.0D);
+            double threshold = Math.cos(Math.toRadians(maxAngleDegrees));
+            if (dot < threshold) {
+                return "INVALID_CLIENT_AIM_PAYLOAD_ANGLE";
+            }
+        }
+
+        return null;
+    }
+
+    private static String validateAimTarget(Vec3 shotOrigin, Vec3 aimTarget, GunStats stats) {
+        if (!isFinite(shotOrigin) || !isFinite(aimTarget) || stats == null) {
+            return "INVALID_AIM_TARGET";
+        }
+
+        double distance = shotOrigin.distanceTo(aimTarget);
+        if (distance < AIM_TARGET_MIN_DISTANCE) {
+            return "AIM_TARGET_TOO_CLOSE";
+        }
+        if (distance > stats.range() + AIM_TARGET_MAX_EXTRA_DISTANCE) {
+            return "AIM_TARGET_TOO_FAR";
+        }
+        return null;
+    }
+
+    private static void logAimResolution(ServerPlayer player, GunStats stats, ResolvedAim aim, Vec3 hitPoint, byte hitType) {
+        String providerName = aim.source() == AimSource.VANILLA_FALLBACK ? "VANILLA_AIM_PROVIDER" : "THE_CAM_MOUSE_FOLLOW";
+
+        String hitDescription = switch (hitType) {
+            case GunShotVisualPayload.HIT_ENTITY -> "ENTITY";
+            case GunShotVisualPayload.HIT_BLOCK -> "BLOCK";
+            default -> "MISS";
+        };
+
+        if (aim.source() == AimSource.CLIENT_PAYLOAD) {
+            TheCamArsenal.LOGGER.info(
+                    "ARSENAL_AIM_PROVIDER_SELECTED provider={} active={} hasTarget={} origin={} direction={} target={}",
+                    providerName,
+                    true,
+                    aim.hasAimTarget(),
+                    aim.cameraOrigin(),
+                    aim.shotDirection(),
+                    aim.aimTarget());
+            TheCamArsenal.LOGGER.info(
+                    "ARSENAL_SHOT_USING_CLIENT_THECAM_MOUSE_FOLLOW_PAYLOAD shotOrigin={} aimTarget={} shotDirection={}",
+                    aim.shotOrigin(),
+                    aim.aimTarget(),
+                    aim.shotDirection());
+        } else if (aim.source() == AimSource.SERVER_STORE) {
+            TheCamArsenal.LOGGER.info(
+                    "ARSENAL_AIM_PROVIDER_SELECTED provider={} active={} hasTarget={} origin={} direction={} target={}",
+                    providerName,
+                    true,
+                    aim.hasAimTarget(),
+                    aim.cameraOrigin(),
+                    aim.shotDirection(),
+                    aim.aimTarget());
+            TheCamArsenal.LOGGER.info(
+                    "ARSENAL_SHOT_USING_SERVER_THECAM_AIM_STORE shotOrigin={} aimTarget={} shotDirection={}",
+                    aim.shotOrigin(),
+                    aim.aimTarget(),
+                    aim.shotDirection());
+        } else {
+            TheCamArsenal.LOGGER.info(
+                    "ARSENAL_SHOT_FALLBACK reason={} provider={} cameraOrigin={} shotOrigin={} shotDirection={} aimTarget={} hitPos={} hitType={} distance={} player={} range={}",
+                    aim.fallbackReason(),
+                    providerName,
+                    aim.cameraOrigin(),
+                    aim.shotOrigin(),
+                    aim.shotDirection(),
+                    aim.aimTarget(),
+                    hitPoint,
+                    hitDescription,
+                    hitPoint.distanceTo(aim.shotOrigin()),
+                    player.getGameProfile().getName(),
+                    stats.range());
+        }
+    }
+
+    private static Vec3 resolveShotOrigin(ServerPlayer player, Vec3 cameraOrigin, boolean useTheCamAim) {
+        if (!useTheCamAim) {
+            return player.getEyePosition(1.0F);
         }
         if (CommonConfig.INSTANCE.isTheCamAimOriginPlayerEye()) {
             return player.getEyePosition(1.0F);
@@ -200,13 +299,16 @@ public final class GunShotHandler {
         return vector.normalize();
     }
 
-    private static boolean isValidAimTarget(Vec3 shotOrigin, Vec3 aimTarget, GunStats stats) {
-        if (!isFinite(shotOrigin) || !isFinite(aimTarget) || stats == null) {
-            return false;
-        }
+    private static Vec3 sanitizeVec(Vec3 candidate, Vec3 fallback) {
+        return isFinite(candidate) ? candidate : fallback;
+    }
 
-        double distance = shotOrigin.distanceTo(aimTarget);
-        return distance >= AIM_TARGET_MIN_DISTANCE;
+    private static boolean isWeaponEnabled(String weaponId) {
+        return switch (weaponId) {
+            case "scarm" -> CommonConfig.INSTANCE.enableScarm.get();
+            case "akm_47" -> CommonConfig.INSTANCE.enableAkm47.get();
+            default -> true;
+        };
     }
 
     private static boolean isFinite(Vec3 vec) {
@@ -214,5 +316,19 @@ public final class GunShotHandler {
                 && Double.isFinite(vec.x)
                 && Double.isFinite(vec.y)
                 && Double.isFinite(vec.z);
+    }
+
+    private static double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private enum AimSource {
+        CLIENT_PAYLOAD,
+        SERVER_STORE,
+        VANILLA_FALLBACK
+    }
+
+    private record ResolvedAim(AimSource source, Vec3 cameraOrigin, Vec3 shotOrigin, Vec3 shotDirection, Vec3 aimTarget,
+            boolean hasAimTarget, byte visualProvider, String fallbackReason) {
     }
 }

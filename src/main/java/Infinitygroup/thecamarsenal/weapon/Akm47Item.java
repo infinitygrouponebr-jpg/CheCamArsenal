@@ -2,6 +2,7 @@ package infinitygroup.thecamarsenal.weapon;
 
 import infinitygroup.thecamarsenal.client.GunClientExtensions;
 import infinitygroup.thecamarsenal.client.ArsenalClientPermissionState;
+import infinitygroup.thecamarsenal.client.GunShootClientPayloadHelper;
 import infinitygroup.thecamarsenal.TheCamArsenal;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -42,10 +43,8 @@ public final class Akm47Item extends Item implements GeoItem, GunItem {
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, net.minecraft.world.entity.player.Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
-        if (level instanceof ServerLevel serverLevel && player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
-            if (GunShotHandler.tryFire(serverPlayer, stack, this.definition)) {
-                triggerAnim(player, GeoItem.getOrAssignId(stack, serverLevel), "akm47_controller", "shoot");
-            }
+        if (level.isClientSide()) {
+            GunShootClientPayloadHelper.sendShootPayload(this.definition, hand);
         }
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide());
     }
@@ -127,5 +126,10 @@ public final class Akm47Item extends Item implements GeoItem, GunItem {
     @Override
     public void triggerReloadAnimation(net.minecraft.server.level.ServerPlayer player, ServerLevel level, ItemStack stack) {
         triggerAnim(player, GeoItem.getOrAssignId(stack, level), "akm47_controller", "reload");
+    }
+
+    @Override
+    public void triggerShootAnimation(net.minecraft.server.level.ServerPlayer player, ServerLevel level, ItemStack stack) {
+        triggerAnim(player, GeoItem.getOrAssignId(stack, level), "akm47_controller", "shoot");
     }
 }

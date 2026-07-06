@@ -27,6 +27,7 @@ public final class CommonConfig {
     public final ModConfigSpec.IntValue scarmReloadTicks;
     public final ModConfigSpec.BooleanValue enableFriendlyFire;
     public final ModConfigSpec.BooleanValue enableDebugAim;
+    public final ModConfigSpec.DoubleValue clientAimPayloadMaxAngleDegrees;
     public final ModConfigSpec.ConfigValue<String> theCamAimOriginMode;
     public final ModConfigSpec.BooleanValue requireAmmoForGuns;
     public final ModConfigSpec.BooleanValue creativeGunsIgnoreAmmo;
@@ -62,6 +63,8 @@ public final class CommonConfig {
                 .define("enableFriendlyFire", false);
         enableDebugAim = builder.comment("Log aim origin/direction details for debugging.")
                 .define("enableDebugAim", false);
+        clientAimPayloadMaxAngleDegrees = builder.comment("Maximum allowed angle in degrees between client-shipped aim direction and server-side player view direction.")
+                .defineInRange("clientAimPayloadMaxAngleDegrees", 120.0D, 0.0D, 180.0D);
         theCamAimOriginMode = builder.comment("The Cam aim origin mode: PLAYER_EYE or CAMERA.")
                 .define("theCamAimOriginMode", "PLAYER_EYE");
         requireAmmoForGuns = builder.comment("Require ammunition for rifle firing.")
