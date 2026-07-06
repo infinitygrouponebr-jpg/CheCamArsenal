@@ -1,0 +1,116 @@
+{
+  "parent": "builtin/entity",
+  "textures": {
+    "particle": "thecamarsenal:item/scarm"
+  },
+  "texture_size": [
+    32,
+    32
+  ],
+  "display": {
+    "thirdperson_righthand": {
+      "rotation": [
+        -121.31,
+        89.13,
+        117.2
+      ],
+      "translation": [
+        0.25,
+        -3.25,
+        -1
+      ],
+      "scale": [
+        0.74922,
+        0.55,
+        0.55
+      ]
+    },
+    "thirdperson_lefthand": {
+      "rotation": [
+        -46.94,
+        -89.05,
+        -44.05
+      ],
+      "translation": [
+        0.25,
+        -3.25,
+        -1
+      ],
+      "scale": [
+        0.74922,
+        0.55,
+        0.55
+      ]
+    },
+    "firstperson_righthand": {
+      "rotation": [
+        -121.30999999999995,
+        89.13000000000011,
+        117.19999999999982
+      ],
+      "translation": [
+        0.25,
+        -3.25,
+        -1
+      ],
+      "scale": [
+        0.74922,
+        0.55,
+        0.55
+      ]
+    },
+    "firstperson_lefthand": {
+      "rotation": [
+        -46.940000000000055,
+        -89.05000000000018,
+        -44.05000000000018
+      ],
+      "translation": [
+        0.25,
+        -3.25,
+        -1
+      ],
+      "scale": [
+        0.74922,
+        0.55,
+        0.55
+      ]
+    },
+    "ground": {
+      "translation": [
+        0,
+        2,
+        0
+      ],
+      "scale": [
+        0.5,
+        0.5,
+        0.5
+      ]
+    },
+    "gui": {
+      "rotation": [
+        30,
+        -135,
+        0
+      ],
+      "translation": [
+        0.5,
+        -3.5,
+        0
+      ],
+      "scale": [
+        0.45,
+        0.45,
+        0.45
+      ]
+    },
+    "fixed": {
+      "translation": [
+        0,
+        -6.25,
+        0
+      ]
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "thecamarsenal:item/medium_rifle_ammo"
+  }
+}

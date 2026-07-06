@@ -1,0 +1,20 @@
+{
+  "akm_47_shoot": {
+    "subtitle": "subtitles.thecamarsenal.akm_47_shoot",
+    "sounds": [
+      {
+        "name": "thecamarsenal:akm_47_shoot",
+        "stream": false
+      }
+    ]
+  },
+  "scarm_shoot": {
+    "subtitle": "subtitles.thecamarsenal.scarm_shoot",
+    "sounds": [
+      {
+        "name": "thecamarsenal:scarm_shoot",
+        "stream": false
+      }
+    ]
+  }
+}

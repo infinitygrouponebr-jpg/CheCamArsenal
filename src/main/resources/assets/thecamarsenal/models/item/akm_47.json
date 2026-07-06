@@ -1,0 +1,145 @@
+{
+  "parent": "builtin/entity",
+  "textures": {
+    "particle": "thecamarsenal:item/akm_47"
+  },
+  "texture_size": [
+    32,
+    32
+  ],
+  "display": {
+    "thirdperson_righthand": {
+      "rotation": [
+        -94.98,
+        81.69,
+        99.01
+      ],
+      "translation": [
+        0.25,
+        -6.75,
+        -2
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ]
+    },
+    "thirdperson_lefthand": {
+      "rotation": [
+        -109.61,
+        -87.75,
+        -114.41
+      ],
+      "translation": [
+        0.25,
+        -6.75,
+        -2
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ]
+    },
+    "firstperson_righthand": {
+      "rotation": [
+        -94.98000000000002,
+        81.69000000000005,
+        99.01000000000022
+      ],
+      "translation": [
+        0.25,
+        -6.75,
+        -2
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ]
+    },
+    "firstperson_lefthand": {
+      "rotation": [
+        -109.61000000000013,
+        -87.75,
+        -114.40999999999985
+      ],
+      "translation": [
+        0.25,
+        -6.75,
+        -2
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ]
+    },
+    "ground": {
+      "translation": [
+        0,
+        2,
+        0
+      ],
+      "scale": [
+        0.5,
+        0.5,
+        0.5
+      ]
+    },
+    "gui": {
+      "rotation": [
+        -141.51000000000022,
+        -10.88000000000011,
+        163.67000000000007
+      ],
+      "translation": [
+        1,
+        -4.75,
+        0
+      ],
+      "scale": [
+        0.3125,
+        0.33789,
+        0.625
+      ]
+    },
+    "head": {
+      "rotation": [
+        -180,
+        20.25,
+        -180
+      ],
+      "translation": [
+        0,
+        -4.5,
+        7
+      ]
+    },
+    "fixed": {
+      "rotation": [
+        0,
+        -22.5,
+        0
+      ],
+      "translation": [
+        0,
+        -15,
+        0
+      ],
+      "scale": [
+        0.5,
+        0.5,
+        0.5
+      ]
+    },
+    "on_shelf": {
+      "rotation": [
+        0,
+        -180,
+        0
+      ]
+    }
+  }
+}

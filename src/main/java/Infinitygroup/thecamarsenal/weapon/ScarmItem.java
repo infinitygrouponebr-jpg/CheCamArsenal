@@ -1,0 +1,142 @@
+package infinitygroup.thecamarsenal.weapon;
+
+import infinitygroup.thecamarsenal.TheCamArsenal;
+import infinitygroup.thecamarsenal.client.ArsenalClientPermissionState;
+import infinitygroup.thecamarsenal.client.GunClientExtensions;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
+import net.minecraft.world.level.Level;
+import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
+import software.bernie.geckolib.animatable.GeoItem;
+import software.bernie.geckolib.animatable.client.GeoRenderProvider;
+import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
+import software.bernie.geckolib.animation.AnimationController;
+import software.bernie.geckolib.animation.PlayState;
+import software.bernie.geckolib.animation.RawAnimation;
+import software.bernie.geckolib.animation.AnimatableManager.ControllerRegistrar;
+import software.bernie.geckolib.util.GeckoLibUtil;
+
+import java.util.List;
+import java.util.Locale;
+import java.util.function.Consumer;
+
+public final class ScarmItem extends Item implements GeoItem, GunItem {
+    private static final RawAnimation SHOOT_ANIM = RawAnimation.begin().thenPlay("shoot");
+    private static final RawAnimation RELOAD_ANIM = RawAnimation.begin().thenPlay("reload");
+
+    private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
+    private final GunDefinition definition;
+
+    public ScarmItem(Properties properties, GunDefinition definition) {
+        super(properties.stacksTo(1));
+        this.definition = definition;
+        GeoItem.registerSyncedAnimatable(this);
+    }
+
+    @Override
+    public InteractionResultHolder<ItemStack> use(Level level, net.minecraft.world.entity.player.Player player, InteractionHand hand) {
+        ItemStack stack = player.getItemInHand(hand);
+        if (level instanceof ServerLevel serverLevel && player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+            if (GunShotHandler.tryFire(serverPlayer, stack, this.definition)) {
+                triggerAnim(player, GeoItem.getOrAssignId(stack, serverLevel), "scarm_controller", "shoot");
+            }
+        }
+        return InteractionResultHolder.sidedSuccess(stack, level.isClientSide());
+    }
+
+    @Override
+    public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag tooltipFlag) {
+        GunStats stats = GunShotHandler.resolveStats(this.definition);
+        Component damageValue = Component.literal(String.format(Locale.ROOT, "%.1f", stats.damage())).withStyle(ChatFormatting.AQUA);
+        Component rangeValue = Component.literal(Long.toString(Math.round(stats.range()))).withStyle(ChatFormatting.GREEN);
+        int ammo = GunAmmoHelper.getAmmo(stack, this.definition);
+        int maxAmmo = GunAmmoHelper.getMaxAmmo(this.definition);
+        boolean canSeeTechnicalTooltips = ArsenalClientPermissionState.canSeeTechnicalTooltips();
+
+        tooltip.add(Component.translatable("tooltip.thecamarsenal.scarm.subtitle").withStyle(ChatFormatting.GOLD));
+        tooltip.add(Component.translatable("tooltip.thecamarsenal.scarm.damage", damageValue).withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.translatable("tooltip.thecamarsenal.scarm.range", rangeValue).withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.translatable("tooltip.thecamarsenal.scarm.fire_rate").withStyle(ChatFormatting.YELLOW));
+        tooltip.add(Component.translatable("tooltip.thecamarsenal.scarm.fire_type").withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.translatable("tooltip.thecamarsenal.scarm.aim").withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.translatable("tooltip.thecamarsenal.scarm.ammo", ammo, maxAmmo).withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.translatable("tooltip.thecamarsenal.scarm.description_1").withStyle(ChatFormatting.DARK_GRAY));
+        tooltip.add(Component.translatable("tooltip.thecamarsenal.scarm.description_2").withStyle(ChatFormatting.DARK_GRAY));
+        tooltip.add(Component.empty());
+
+        if (canSeeTechnicalTooltips && tooltipFlag.hasShiftDown()) {
+            tooltip.add(Component.translatable("tooltip.thecamarsenal.scarm.details_title").withStyle(ChatFormatting.AQUA, ChatFormatting.BOLD));
+            tooltip.add(Component.translatable("tooltip.thecamarsenal.scarm.tech_fire_system").withStyle(ChatFormatting.GRAY));
+            tooltip.add(Component.translatable("tooltip.thecamarsenal.scarm.tech_recoil").withStyle(ChatFormatting.GRAY));
+            tooltip.add(Component.translatable("tooltip.thecamarsenal.scarm.tech_visual").withStyle(ChatFormatting.GRAY));
+            tooltip.add(Component.translatable("tooltip.thecamarsenal.scarm.tech_sound").withStyle(ChatFormatting.GRAY));
+            tooltip.add(Component.translatable("tooltip.thecamarsenal.scarm.tech_no_arrow").withStyle(ChatFormatting.GRAY));
+            tooltip.add(Component.translatable("tooltip.thecamarsenal.weapon.tech_reload_manual").withStyle(ChatFormatting.GRAY));
+            tooltip.add(Component.translatable("tooltip.thecamarsenal.weapon.tech_ammo_component").withStyle(ChatFormatting.GRAY));
+            tooltip.add(Component.translatable("tooltip.thecamarsenal.weapon.tech_ammo_use").withStyle(ChatFormatting.GRAY));
+        } else if (canSeeTechnicalTooltips) {
+            tooltip.add(Component.translatable("tooltip.thecamarsenal.scarm.shift").withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC));
+        }
+    }
+
+    @Override
+    public void initializeClient(Consumer<IClientItemExtensions> consumer) {
+        consumer.accept(new IClientItemExtensions() {
+            @Override
+            public boolean applyForgeHandTransform(com.mojang.blaze3d.vertex.PoseStack poseStack, net.minecraft.client.player.LocalPlayer player,
+                    net.minecraft.world.entity.HumanoidArm arm, ItemStack itemInHand, float partialTick, float equipProcess, float swingProcess) {
+                return GunClientExtensions.INSTANCE.applyForgeHandTransform(poseStack, player, arm, itemInHand, partialTick, equipProcess, swingProcess);
+            }
+
+            @Override
+            public net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer getCustomRenderer() {
+                return GunClientExtensions.scarmRenderer();
+            }
+        });
+    }
+
+    @Override
+    public void createGeoRenderer(Consumer<GeoRenderProvider> consumer) {
+        TheCamArsenal.LOGGER.info("Scarm GeckoLib render provider requested");
+        consumer.accept(new GeoRenderProvider() {
+            @Override
+            public net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer getGeoItemRenderer() {
+                TheCamArsenal.LOGGER.info("Scarm GeckoLib item renderer supplied");
+                return GunClientExtensions.scarmRenderer();
+            }
+        });
+    }
+
+    @Override
+    public void registerControllers(ControllerRegistrar controllers) {
+        controllers.add(new AnimationController<>(this, "scarm_controller", 0, state -> PlayState.STOP)
+                .triggerableAnim("shoot", SHOOT_ANIM)
+                .triggerableAnim("reload", RELOAD_ANIM));
+    }
+
+    @Override
+    public AnimatableInstanceCache getAnimatableInstanceCache() {
+        return this.cache;
+    }
+
+    @Override
+    public boolean isPerspectiveAware() {
+        return true;
+    }
+
+    @Override
+    public GunDefinition getGunDefinition() {
+        return this.definition;
+    }
+
+    @Override
+    public void triggerReloadAnimation(net.minecraft.server.level.ServerPlayer player, ServerLevel level, ItemStack stack) {
+        triggerAnim(player, GeoItem.getOrAssignId(stack, level), "scarm_controller", "reload");
+    }
+}
